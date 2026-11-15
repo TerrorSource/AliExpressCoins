@@ -1,0 +1,7 @@
+# Login session (cookies) and secrets: never commit these.
+/data/
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store

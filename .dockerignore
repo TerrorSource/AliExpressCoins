@@ -1,0 +1,13 @@
+data/
+.env
+.git
+.github/
+tests/
+commit-git.sh
+docker-compose*.yml
+requirements-dev.txt
+pytest.ini
+*.md
+!README.md
+**/__pycache__
+**/.DS_Store

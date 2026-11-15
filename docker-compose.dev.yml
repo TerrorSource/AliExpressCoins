@@ -1,0 +1,18 @@
+# Local development: builds the image from this folder, settings from .env (cp .env.example .env).
+#   docker compose -f docker-compose.dev.yml up -d --build
+services:
+  aliexpress-coins:
+    container_name: aliexpress-coins-dev
+    build: .
+    image: aliexpress-coins:dev
+    init: true
+    restart: unless-stopped
+    network_mode: bridge
+    shm_size: 1gb
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - 127.0.0.1:8080:8080               # only this machine
+    volumes:
+      - ./data:/data

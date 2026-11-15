@@ -1,0 +1,20 @@
+services:
+  aliexpress-coins:
+    container_name: aliexpress-coins
+    image: ghcr.io/terrorsource/aliexpresscoins:latest
+    init: true
+    restart: unless-stopped
+    network_mode: bridge
+    shm_size: 1gb                         # Chromium crashes with Docker's default 64 MB
+    environment:
+      - TZ=Europe/Amsterdam               # otherwise times are shown in UTC
+      - SCHEDULE=10:30,20:30              # check-in resets around 09:00 Dutch time
+      - PANEL_USER=admin
+      - PANEL_PASSWORD=                   # set this: whoever reaches the panel can use your AliExpress session
+      - NOTIFY_URLS=                      # optional, Apprise URLs, e.g. ntfy://ntfy.sh/my-topic
+      - NOTIFY_LEVEL=errors               # errors | summary | none
+      # All other settings: see .env.example
+    ports:
+      - 8098:8080
+    volumes:
+      - /mnt/ssd/docker/aliexpress-coins/data:/data
