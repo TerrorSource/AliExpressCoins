@@ -4,6 +4,15 @@ Alle wijzigingen aan AliExpress Coins staan hier, nieuwste bovenaan.
 Versienummers volgen [semver](https://semver.org/lang/nl/): `MAJOR.MINOR.PATCH`.
 Het versienummer staat op één plek: `app/version.py`.
 
+## [0.1.3] - 2026-11-16
+
+### Opgelost
+- **Na elke herstart een extra run.** Bij accounts zonder website-check-in ("niet beschikbaar") dacht de container na elke herstart dat de check-in van vandaag niet af was. Daardoor draaide hij opnieuw, ook direct na een run die je zelf in het paneel had gestart. "Niet beschikbaar" telt nu als klaar voor vandaag, en de opstart-run slaat zich over als een andere run de check-in intussen al heeft gedaan.
+
+### Gewijzigd
+- **"Water to win" en "Visit the page via coins shortcut" staan standaard uit.** Getest met een ingelogd account: op de website toont Prize Land alleen "Download the AliExpress app / Install App", en de link van de snelkoppeling telt niet als je hem in een browser opent. Beide werken dus alleen in de app. Het paneel noemt die reden nu bij "Overgeslagen". Verandert AliExpress dat, dan kun je ze weer aanzetten met `PRIZE_LAND_WATER=true` en `SHORTCUT_TASK=true`.
+- De log van een run noemt nu ook elke taak die niet lukte, met de reden.
+
 ## [0.1.2] - 2026-11-16
 
 ### Toegevoegd

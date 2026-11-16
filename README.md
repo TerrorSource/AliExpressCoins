@@ -17,8 +17,6 @@ Elke run doet, in deze volgorde:
 | **Mobiele check-in** | De dagelijkse check-in van de app (`m.aliexpress.com/p/coin-index`), met telefoon-emulatie (Pixel 7). | 10 → 50 per dag, oplopend met je reeks |
 | **Taken** | De taken onder "Earn more coins" die alleen een pagina openen of bekijken: Super discounts (3×), Recently viewed, Coins Savings Recap, Search, Coupons & credits, de +1 check-in-bonus. Na elke taak wordt de lijst opnieuw geladen, want een afgeronde taak ontgrendelt vaak een nieuwe. | ± 30–45 per dag |
 | **Dagelijkse quiz** | Beantwoordt de quiz. Een fout antwoord wordt onthouden, zodat de volgende keer een ander antwoord gekozen wordt. | 1–5 |
-| **Water to win** | Opent Prize Land en tikt één keer op "Water". Koopt nooit iets en kiest nooit een prijs. | 5 |
-| **Coins shortcut** | Opent de link die de snelkoppeling van de app opent. | 5 |
 | **Website check-in** | De aparte check-in op de PC-site (`www.aliexpress.com/p/coin-pc-index`). Dit is de wens uit [issue #2](https://github.com/mouad73/AliexpressCollecteCoins/issues/2), maar dan andersom: de app-check-in en de website-check-in zijn twee losse beloningen, en deze container doet ze allebei. Bij sommige accounts en regio's toont de PC-pagina alleen een QR-code. Dan meldt het paneel "niet beschikbaar". | wisselt |
 
 Elke stap telt pas als geslaagd als AliExpress het zelf bevestigt: het API-antwoord van de
@@ -31,9 +29,12 @@ ingecheckt. Runs zijn idempotent: een tweede run op dezelfde dag doet alleen wat
   advertenties bekijkt of aanklikt is nepverkeer waar adverteerders voor betalen. Dat zijn ± 20
   coins per dag die je zelf kunt doen via de loginbrowser in het paneel.
 - **Spellen en bestellingen** (Merge Boss, "Items at $0.1", taken die een aankoop vragen). Die
-  werken alleen in de app of kosten geld. Alleen het water geven in Prize Land doet de container wel.
-- **Delen met vrienden, widget, meldingen.** Delen telt pas als vrienden je link openen. Widget en
-  meldingen zijn eenmalig en werken alleen in de app op je telefoon (samen +25 coins).
+  werken alleen in de app of kosten geld.
+- **Alleen-in-de-app-taken.** "Water to win" (Prize Land toont op de website alleen "Install App"),
+  "Visit the page via coins shortcut" (telt alleen via de snelkoppeling van de app), delen met
+  vrienden (telt pas als vrienden je link openen), en de eenmalige widget- en meldingentaak (samen
+  +25 coins als je ze één keer op je telefoon doet). Water en snelkoppeling kun je proberen met
+  `PRIZE_LAND_WATER=true` en `SHORTCUT_TASK=true`, voor als AliExpress dat ooit verandert.
 - **Captcha's oplossen of je wachtwoord opslaan.** Je logt één keer zelf in. De container bewaart
   alleen de browsersessie (cookies) in `./data`.
 
@@ -113,7 +114,7 @@ Zet ze onder `environment:` in je compose-bestand, of in `.env` bij de dev-compo
 | `JITTER_MINUTES` | `20` | Willekeurige vertraging per run. |
 | `RUN_ON_START` | `true` | Bij het opstarten meteen een run als vandaag nog niet is ingecheckt. |
 | `MOBILE_CHECKIN` / `PC_CHECKIN` / `TASKS` / `QUIZ` | `true` | Onderdelen aan of uit zetten. |
-| `PRIZE_LAND_WATER` / `SHORTCUT_TASK` | `true` | De taken "Water to win" en "Visit the page via coins shortcut" aan of uit. |
+| `PRIZE_LAND_WATER` / `SHORTCUT_TASK` | `false` | De taken "Water to win" en "Visit the page via coins shortcut" toch proberen. Werkt nu alleen in de app. |
 | `TASK_BUDGET_MINUTES` | `30` | Maximale tijd voor de taken per run. |
 | `TASK_BLOCKLIST` | leeg | Regex: taken met een titel die hierop lijkt worden overgeslagen. |
 | `EXTRA_TASK_TYPES` | leeg | Voor gevorderden: extra tasktypes (getallen uit het runlog) die als "pagina bekijken" gelden. |

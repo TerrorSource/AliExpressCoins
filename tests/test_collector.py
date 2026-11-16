@@ -73,15 +73,19 @@ SURPRISE = task(taskId=3302001, mainTitle="Browse surprise items", type=26, mate
     (task(mainTitle="Turn on notifications", type=43, materialUrl=None), None),
     (task(mainTitle="Items at $0.1 to get", materialUrl="https://m.aliexpress.com/ssr/300000949/farmpc"), None),
 ])
-def test_task_kind_new_types(m, kind):
+def test_task_kind_new_types(m, kind, monkeypatch):
+    monkeypatch.setattr(collector.config, "DO_WATER", True)
+    monkeypatch.setattr(collector.config, "DO_SHORTCUT", True)
     assert collector.task_kind(m)[0] == kind
 
 
-def test_water_and_shortcut_can_be_turned_off(monkeypatch):
+def test_water_and_shortcut_are_off_by_default(monkeypatch):
+    # Tested 2026-11-16: Prize Land only shows "Install App" on the website, and the
+    # shortcut link is not counted when a browser opens it.
     monkeypatch.setattr(collector.config, "DO_WATER", False)
     monkeypatch.setattr(collector.config, "DO_SHORTCUT", False)
-    assert collector.task_kind(WATER) == (None, "PRIZE_LAND_WATER staat uit")
-    assert collector.task_kind(SHORTCUT_TASK) == (None, "SHORTCUT_TASK staat uit")
+    assert collector.task_kind(WATER) == (None, "Prize Land werkt alleen in de app")
+    assert collector.task_kind(SHORTCUT_TASK) == (None, "telt alleen via de snelkoppeling in de app")
 
 
 def test_shortcut_url_falls_back_to_shortcut_material():

@@ -43,9 +43,11 @@ DO_PC_CHECKIN = env_bool("PC_CHECKIN", True)
 DO_TASKS = env_bool("TASKS", True)
 DO_QUIZ = env_bool("QUIZ", True)
 # "Water to win" (Prize Land): give the tree its daily water. Never buys or picks a prize.
-DO_WATER = env_bool("PRIZE_LAND_WATER", True)
+# Off by default: on the mobile website Prize Land only shows "Install App" (2026-11).
+DO_WATER = env_bool("PRIZE_LAND_WATER", False)
 # "Visit the page via coins shortcut": open the link the app's home-screen shortcut opens.
-DO_SHORTCUT = env_bool("SHORTCUT_TASK", True)
+# Off by default: opening that link in a browser is not counted (2026-11).
+DO_SHORTCUT = env_bool("SHORTCUT_TASK", False)
 TASK_BUDGET_MINUTES = env_int("TASK_BUDGET_MINUTES", 30)
 # Extra task types (numbers from the task list) to treat as "browse a page" tasks.
 EXTRA_TASK_TYPES = {int(t) for t in re.findall(r"\d+", env("EXTRA_TASK_TYPES", ""))}

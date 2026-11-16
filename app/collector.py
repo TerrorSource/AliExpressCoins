@@ -404,9 +404,9 @@ def task_kind(m):
     if QUIZ_RE.search(text):
         return ("quiz", None) if config.DO_QUIZ else (None, "quiz staat uit")
     if is_water_task(m):
-        return ("water", None) if config.DO_WATER else (None, "PRIZE_LAND_WATER staat uit")
+        return ("water", None) if config.DO_WATER else (None, "Prize Land werkt alleen in de app")
     if m.get("type") == 29 and shortcut_url(m):
-        return ("shortcut", None) if config.DO_SHORTCUT else (None, "SHORTCUT_TASK staat uit")
+        return ("shortcut", None) if config.DO_SHORTCUT else (None, "telt alleen via de snelkoppeling in de app")
     if m.get("type") == 22:
         return None, "telt pas als vrienden je link openen"
     if m.get("type") in (38, 43):
@@ -579,6 +579,9 @@ async def do_water(ctx, page, log):
             break
     text = await page_text(farm, timeout=20000) or ""
     log.append("Prize Land: " + " | ".join(text.split("\n"))[:600])
+    if re.search(r"install app|download the aliexpress app", text, re.I):
+        await shot(farm, "prizeland")
+        return "Prize Land werkt op de website niet: de pagina vraagt om de app te installeren"
     candidates = [farm.get_by_text(WATER_RE).filter(visible=True),
                   farm.get_by_role("button", name=re.compile(r"\bwater", re.I)).filter(visible=True)]
     for loc in candidates:

@@ -92,7 +92,8 @@ def record(result):
     today = now().date().isoformat()
     result["state"] = summarize(result)
     for k in ("mobile", "pc"):
-        if (result.get(k) or {}).get("status") in ("collected", "already"):
+        # not_available: this account has no check-in there, so nothing is left to do today.
+        if (result.get(k) or {}).get("status") in ("collected", "already", "not_available"):
             st.setdefault("last_success", {})[k] = today
     earned = (result.get("tasks") or {}).get("earned", 0)
     day = st.get("today") or {}
@@ -142,7 +143,9 @@ def run_text(result):
     tk = result.get("tasks")
     if tk:
         done = sum(1 for i in tk.get("items", []) if i["state"] == "done")
+        failed = [i for i in tk.get("items", []) if i["state"] == "failed"]
         lines.append(f"Taken: {done} klaar, +{tk.get('earned', 0)} coins deze run" + (f" ({tk['error']})" if tk.get("error") else ""))
+        lines += [f"  Niet gelukt: {i['title']} – {i.get('reason') or 'onbekend'}" for i in failed]
     if result.get("balance") is not None:
         lines.append(f"Saldo: {result['balance']} coins")
     return "\n".join(lines)
@@ -205,14 +208,20 @@ def next_run_time():
     return min(candidates) + datetime.timedelta(seconds=random.randint(0, max(0, config.JITTER_MINUTES) * 60))
 
 
+def checkin_missing_today():
+    st = load_status()
+    today = now().date().isoformat()
+    wanted = [k for k, on in (("mobile", config.DO_MOBILE_CHECKIN), ("pc", config.DO_PC_CHECKIN)) if on]
+    has_login = os.path.exists(f"{config.PROFILE}/Default/Cookies")  # nothing to do before the first login
+    return has_login and any(st.get("last_success", {}).get(k) != today for k in wanted)
+
+
 async def scheduler():
-    if config.RUN_ON_START:
-        st = load_status()
-        today = now().date().isoformat()
-        wanted = [k for k, on in (("mobile", config.DO_MOBILE_CHECKIN), ("pc", config.DO_PC_CHECKIN)) if on]
-        has_login = os.path.exists(f"{config.PROFILE}/Default/Cookies")  # nothing to do before the first login
-        if has_login and any(st.get("last_success", {}).get(k) != today for k in wanted):
-            await asyncio.sleep(60)
+    if config.RUN_ON_START and checkin_missing_today():
+        await asyncio.sleep(60)
+        while lock.locked() or login:  # a run started from the panel meanwhile: let it finish first
+            await asyncio.sleep(10)
+        if checkin_missing_today():  # that run may already have done it
             log("Vandaag nog niet (volledig) ingecheckt: run bij het opstarten")
             await do_run()
     while True:
