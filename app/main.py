@@ -274,7 +274,10 @@ async def api_login_start(request):
             chrome = subprocess.Popen(
                 [config.chrome_path(), f"--user-data-dir={config.PROFILE}", "--no-sandbox", "--test-type",
                  "--no-first-run", "--no-default-browser-check",
+                 # WebGL via SwiftShader: there is no GPU, and without WebGL the captcha's
+                 # fingerprint script marks the browser as suspicious.
                  "--log-level=3", "--disable-background-networking", "--enable-unsafe-swiftshader",
+                 "--use-angle=swiftshader",
                  f"--window-size={config.SCREEN_W},{config.SCREEN_H}", "--window-position=0,0",
                  f"--lang={config.BROWSER_LOCALE}", config.LOGIN_URL],
                 env={**os.environ, "DISPLAY": config.DISPLAY, "GOOGLE_API_KEY": "no",  # no "API keys missing" bar

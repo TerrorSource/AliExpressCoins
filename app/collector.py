@@ -32,6 +32,8 @@ EARN_MORE_RE = re.compile(r"^\s*(earn more|meer verdienen|verdien meer)", re.I)
 MOBILE_DONE_RE = re.compile(r"today\s*✓|check-in coins tomorrow|coins tomorrow|vandaag\s*✓", re.I)
 PC_DONE_RE = re.compile(r"checked in today|already checked|come back tomorrow|coins tomorrow|today\s*✓|"
                         r"collected today|vandaag\s*✓|morgen terug", re.I)
+# The PC coin page for accounts without a website check-in: only QR codes to the app.
+PC_APP_ONLY_RE = re.compile(r"earn more coins on app|scan the qr code and visit the coins page", re.I)
 PILL_RE = re.compile(r"^\s*\+\s*\d+\s*$")
 PILL_XPATH = "starts-with(normalize-space(text()), '+')"
 
@@ -101,6 +103,8 @@ class Probe:
         self.balance_first = None
         self.balance = None
         self.session_expired = False
+        self.streak = None        # days in a row, from coin.channel.sign.list
+        self.signed_today = None  # True/False once sign.list was seen
 
     async def on_response(self, r):
         url = r.url
@@ -115,8 +119,10 @@ class Probe:
             body = None
         data = parse_mtop(body) or {}
         ret = "; ".join(data.get("ret") or [])
+        # The task list and the check-in calendar are kept whole: they are what you need to debug a run.
+        keep = 40000 if re.search(r"task\.delivery\.query|sign\.list", api) else 2500
         self.log.append({"t": now().isoformat(timespec="seconds"), "api": api, "status": r.status,
-                         "ret": ret[:200], "body": (body or "")[:2500]})
+                         "ret": ret[:200], "body": (body or "")[:keep]})
         try:
             if "SESSION_EXPIRED" in ret and "coin" in api:
                 self.session_expired = True
@@ -130,6 +136,8 @@ class Probe:
                             for i in (res.get("interestIssueResultMap") or {}).values()) if ok else 0
                 self.completes.append({"ok": ok, "coins": coins,
                                        "msg": str(res.get("errorMsg") or res.get("errorCode") or ret)})
+            elif "channel.sign.list" in api:
+                self.read_sign_list(data)
             elif re.search(r"sign\.execute|\.pc\.sign$|\.pc\.sign\.|coin\..*\.sign$", api) and "list" not in api:
                 success = ret.startswith("SUCCESS")
                 ok = success and find_key(data, "issuePrizeSuccess") is not False \
@@ -144,6 +152,26 @@ class Probe:
                     self.balance = n
         except (ValueError, KeyError, TypeError, AttributeError):
             pass
+
+    def read_sign_list(self, data):
+        """The check-in calendar: one node per day, calendarDayDistance 0 is AliExpress's today
+        (Pacific time), sequenceNumber is the day of the streak."""
+        nodes = [n for seq in find_key(data, "signQuerySequenceNodeList") or []
+                 for n in (seq or {}).get("dailySignNodeList") or []]
+        days = {}
+        for n in nodes:
+            res = (n.get("signResultList") or [{}])[0] or {}
+            if isinstance(n.get("calendarDayDistance"), int):
+                days[n["calendarDayDistance"]] = (bool(res.get("signSuccess")), res.get("sequenceNumber"))
+        if 0 not in days:
+            return
+        self.signed_today = days[0][0]
+        for d in (0, -1):  # today if done, else the streak that today's check-in continues
+            ok, seq = days.get(d, (False, None))
+            if ok and isinstance(seq, int):
+                self.streak = seq
+                return
+        self.streak = 0
 
     def signed_since(self, t):
         return [s for s in self.signs if s["at"] >= t]
@@ -265,15 +293,16 @@ async def sign_button(page):
     return None, ""
 
 
-async def read_streak(page):
-    try:
-        return await page.evaluate("""() => {
-            const el = document.querySelector('[class*="aecoin-dayNumber"], [class*="dayNumber"]');
-            const n = el ? parseInt(el.innerText.replace(/\\D/g, ''), 10) : NaN;
-            return Number.isFinite(n) ? n : null;
-        }""")
-    except PlaywrightError:
-        return None
+STREAK_RE = re.compile(r"(\d+)\s*days?\s*streak", re.I)
+
+
+async def read_streak(page, probe, just_signed=False):
+    """From the check-in calendar API, else from the "N days streak" text on the page."""
+    if probe.streak is not None:
+        # The calendar is not always fetched again after the tap; then it still shows yesterday.
+        return probe.streak + 1 if just_signed and probe.signed_today is False else probe.streak
+    m = STREAK_RE.search(await page_text(page, timeout=10000) or "")
+    return int(m.group(1)) if m else None
 
 
 async def mobile_checkin(page, probe):
@@ -292,8 +321,9 @@ async def mobile_checkin(page, probe):
             await shot(page, "mobile")
             return {"status": "session_expired", "detail": "De coin-pagina vraagt om in te loggen"}
         btn, label = await sign_button(page)
-        if EARN_MORE_RE.search(label) or MOBILE_DONE_RE.search(text):
-            return {"status": "already", "detail": "Vandaag al ingecheckt", "streak": await read_streak(page)}
+        if probe.signed_today or EARN_MORE_RE.search(label) or MOBILE_DONE_RE.search(text):
+            await shot(page, "mobile")
+            return {"status": "already", "detail": "Vandaag al ingecheckt", "streak": await read_streak(page, probe)}
         if settled and (BUTTON_RE.search(label) or await page.get_by_text(BUTTON_RE).filter(visible=True).count()):
             break
         await page.wait_for_timeout(2000)
@@ -313,7 +343,7 @@ async def mobile_checkin(page, probe):
     signed = [s for s in probe.signed_since(t_click) if s["ok"]]
     await shot(page, "mobile")
     if signed or MOBILE_DONE_RE.search(after) or EARN_MORE_RE.search(label_after):
-        return {"status": "collected", "detail": f"Op '{label}' getikt", "streak": await read_streak(page)}
+        return {"status": "collected", "detail": f"Op '{label}' getikt", "streak": await read_streak(page, probe, just_signed=True)}
     return {"status": "unconfirmed", "detail": f"Op '{label}' getikt, maar geen bevestiging van AliExpress"}
 
 
@@ -597,6 +627,13 @@ async def pc_checkin(page, probe):
                 break
         if target is not None:
             break
+        if PC_APP_ONLY_RE.search(text):
+            await page.wait_for_timeout(5000)  # give a late check-in widget one more chance
+            if not await page.get_by_text(BUTTON_RE).filter(visible=True).count():
+                await shot(page, "pc")
+                return {"status": "not_available",
+                        "detail": "De website heeft voor jouw account geen check-in, alleen een QR-code naar de app. "
+                                  "De check-in van de app doet de container al."}
         await page.wait_for_timeout(3000)
     if target is None:
         await shot(page, "pc")

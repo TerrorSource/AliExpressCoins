@@ -4,6 +4,19 @@ Alle wijzigingen aan AliExpress Coins staan hier, nieuwste bovenaan.
 Versienummers volgen [semver](https://semver.org/lang/nl/): `MAJOR.MINOR.PATCH`.
 Het versienummer staat op één plek: `app/version.py`.
 
+## [0.1.1] - 2026-11-16
+
+Na de eerste run met een ingelogd account.
+
+### Opgelost
+- **Check-in-reeks bleef leeg.** De reeks komt nu uit de check-in-kalender van AliExpress (`coin.channel.sign.list`). Lukt dat niet, dan uit de tekst "N days streak" op de pagina. Die kalender zegt ook of er vandaag al is ingecheckt, zodat dat niet meer alleen van de paginatekst afhangt.
+- **Website-check-in wachtte 2 minuten op een knop die er niet is.** Toont de PC-pagina alleen "Earn more coins on app" met QR-codes, dan heeft je account op de website geen check-in. De run stopt dan na een paar seconden, met een duidelijke uitleg in het paneel. De check-in van de app doet de container al.
+- **Lege captcha in de loginbrowser.** De loginbrowser had geen WebGL (er is geen GPU in de container). Het script achter de captcha gebruikt dat, en zonder WebGL kon de captcha leeg blijven. De loginbrowser gebruikt nu SwiftShader (`--use-angle=swiftshader`). Blijft het venster toch wit, dan kan je netwerk `ynuf.aliapp.org` blokkeren (een captcha-server van Alibaba). Zie README.
+
+### Gewijzigd
+- In `api/last_run.json` staan de takenlijst en de check-in-kalender nu volledig, in plaats van afgekapt na 2500 tekens.
+- Bij "Vandaag al ingecheckt" wordt nu ook een screenshot van de mobiele pagina gemaakt.
+
 ## [0.1.0] - 2026-11-15
 
 Eerste versie.

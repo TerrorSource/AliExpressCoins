@@ -144,6 +144,12 @@ rest:
 ## Problemen oplossen
 
 - **Paneel → Screenshots** toont de mobiele pagina, de takenlijst en de PC-pagina van de laatste run.
+- **Captcha blijft wit bij het inloggen**: sluit het venster en probeer het opnieuw. Blijft het wit, kijk
+  dan of je netwerk (firewall, Pi-hole, AdGuard, geo-blokkade) `ynuf.aliapp.org` blokkeert. Dat is een
+  captcha-server van Alibaba in China. Of sla de captcha over en plak je cookies in het paneel (optie B).
+- **Website check-in "niet beschikbaar"**: toont de PC-pagina alleen "Earn more coins on app" met
+  QR-codes, dan heeft je account geen check-in op de website. Dat is normaal (bijvoorbeeld in Nederland).
+  De check-in van de app doet de container wel. Wil je de stap overslaan, zet dan `PC_CHECKIN=false`.
 - **`api/last_run.json`** bevat de paginatekst en elk AliExpress-API-antwoord. Verandert AliExpress
   iets, dan is daar meestal te zien wat.
 - **"Knop niet gevonden" of "Niet bevestigd"**: AliExpress heeft waarschijnlijk de pagina veranderd.

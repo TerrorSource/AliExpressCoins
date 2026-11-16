@@ -90,3 +90,41 @@ def test_probe_sign_complete_balance_and_session():
     assert not p.session_expired
     feed(p, "mtop.aliexpress.coin.channel.init", {"ret": ["FAIL_SYS_SESSION_EXPIRED::Session expired"]})
     assert p.session_expired
+
+
+def sign_list(*days):
+    """days: (calendarDayDistance, signSuccess, sequenceNumber), as in coin.channel.sign.list."""
+    nodes = [{"calendarDayDistance": d, "signResultList": [{"signSuccess": ok, "sequenceNumber": seq}]}
+             for d, ok, seq in days]
+    return {"ret": ["SUCCESS::ok"], "data": {"data": {"signQuerySequenceNodeList": [{"dailySignNodeList": nodes}]}}}
+
+
+@pytest.mark.parametrize("days, signed_today, streak", [
+    ([(-1, False, 1), (0, True, 1), (1, False, 2)], True, 1),    # real answer from 2026-11-16
+    ([(-1, True, 3), (0, False, 4), (1, False, 5)], False, 3),   # today still open, streak of 3 continues
+    ([(-1, True, 3), (0, True, 4)], True, 4),
+    ([(-1, False, 1), (0, False, 1)], False, 0),                 # streak broken
+])
+def test_probe_sign_list(days, signed_today, streak):
+    p = collector.Probe()
+    feed(p, "mtop.aliexpress.coin.channel.sign.list", sign_list(*days))
+    assert (p.signed_today, p.streak) == (signed_today, streak)
+
+
+def test_sign_list_body_is_kept_whole():
+    p = collector.Probe()
+    body = sign_list(*[(d, False, 1) for d in range(-2, 300)])
+    feed(p, "mtop.aliexpress.coin.channel.sign.list", body)
+    assert len(p.log[0]["body"]) > 2500
+
+
+@pytest.mark.parametrize("text, n", [("1\n1\ndays streak", 1), ("12 days streak", 12), ("Daily coins", None)])
+def test_streak_text(text, n):
+    m = collector.STREAK_RE.search(text)
+    assert (int(m.group(1)) if m else None) == n
+
+
+def test_pc_app_only_page():
+    text = "Coins\nCollect, shop and save\nEarn more coins on app\n1. Download and open the AliExpress app"
+    assert collector.PC_APP_ONLY_RE.search(text)
+    assert not collector.BUTTON_RE.match("Collect, shop and save")
