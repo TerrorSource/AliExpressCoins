@@ -134,7 +134,8 @@ class Probe:
                 ok = bool(res.get("completeSuccess"))
                 coins = sum(int(i.get("interestNum") or 0)
                             for i in (res.get("interestIssueResultMap") or {}).values()) if ok else 0
-                self.completes.append({"ok": ok, "coins": coins,
+                tid = re.search(r"taskId\W{1,8}(\d+)", str(res.get("interestIssueResultMap") or ""))
+                self.completes.append({"ok": ok, "coins": coins, "task": tid.group(1) if tid else None,
                                        "msg": str(res.get("errorMsg") or res.get("errorCode") or ret)})
             elif "channel.sign.list" in api:
                 self.read_sign_list(data)
@@ -370,8 +371,31 @@ def task_done(m):
     return m.get("instanceStatus") == 2 or (m.get("timesJoined") or 0) >= (m.get("timesLimit") or 1)
 
 
+def behavior(m):
+    try:
+        cfg = json.loads(m.get("behaviorConfig") or "{}")
+        return cfg if isinstance(cfg, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
+def shortcut_url(m):
+    """The coins-page link the app's home-screen shortcut opens (task type 29)."""
+    url = behavior(m).get("shortcutUrl")
+    if not url:
+        try:
+            url = json.loads(m.get("shortcutMaterial") or "{}").get("shortcutUrl")
+        except (ValueError, TypeError, AttributeError):
+            url = None
+    return url if isinstance(url, str) and url.startswith("https://m.aliexpress.com/p/coin-index/") else None
+
+
+def is_water_task(m):
+    return behavior(m).get("taskTagId", "").startswith("watering") or "/p/aefarm/" in str(m.get("materialUrl") or "")
+
+
 def task_kind(m):
-    """("browse"|"quiz", None) when the bot may do it, else (None, reason)."""
+    """("browse"|"quiz"|"water"|"shortcut", None) when the bot may do it, else (None, reason)."""
     text = " ".join(str(m.get(k) or "") for k in ("mainTitle", "secondTitle", "materialUrl", "behaviorConfig"))
     if AD_RE.search(text):
         return None, "advertentietaak (nooit geautomatiseerd)"
@@ -379,6 +403,14 @@ def task_kind(m):
         return None, "staat in TASK_BLOCKLIST"
     if QUIZ_RE.search(text):
         return ("quiz", None) if config.DO_QUIZ else (None, "quiz staat uit")
+    if is_water_task(m):
+        return ("water", None) if config.DO_WATER else (None, "PRIZE_LAND_WATER staat uit")
+    if m.get("type") == 29 and shortcut_url(m):
+        return ("shortcut", None) if config.DO_SHORTCUT else (None, "SHORTCUT_TASK staat uit")
+    if m.get("type") == 22:
+        return None, "telt pas als vrienden je link openen"
+    if m.get("type") in (38, 43):
+        return None, "eenmalig, alleen in de app op je telefoon (widget of meldingen aanzetten)"
     if GAME_RE.search(text):
         return None, "spel, bestelling of alleen in de app"
     if m.get("type") not in SAFE_TASK_TYPES:
@@ -522,6 +554,65 @@ async def do_quiz(ctx, page):
     return None  # unclear: the task list reload tells whether it counted
 
 
+WATER_RE = re.compile(r"^\s*(water(ing)?|water\s*(now|it|the tree)|tap to water)\s*!?\s*$", re.I)
+POPUP_CLOSE_RE = re.compile(r"^\s*(got it|ok|okay|close|skip|later|not now|i know|continue)\s*!?\s*$", re.I)
+SPEND_RE = re.compile(r"buy|order|pay|checkout|add to cart|€|\$|us \$", re.I)
+PICK_PRIZE_RE = re.compile(r"(choose|select|pick)\b.{0,40}\b(prize|item|product|gift)", re.I)
+
+
+async def do_water(ctx, page, log):
+    """Prize Land: water the tree once. Taps only a button that literally says "water";
+    never picks a prize, buys or adds anything to the cart."""
+    await page.wait_for_timeout(6000)
+    farm = next((p for p in reversed(ctx.pages) if "/p/aefarm/" in p.url), None)
+    if farm is None:
+        return "Prize Land opende niet vanuit de takenlijst"
+    await farm.wait_for_timeout(5000)
+    for _ in range(3):  # onboarding popups
+        btn = farm.get_by_text(POPUP_CLOSE_RE).filter(visible=True)
+        try:
+            if not await btn.count():
+                break
+            await tap(btn.first, timeout=5000)
+            await farm.wait_for_timeout(1500)
+        except PlaywrightError:
+            break
+    text = await page_text(farm, timeout=20000) or ""
+    log.append("Prize Land: " + " | ".join(text.split("\n"))[:600])
+    candidates = [farm.get_by_text(WATER_RE).filter(visible=True),
+                  farm.get_by_role("button", name=re.compile(r"\bwater", re.I)).filter(visible=True)]
+    for loc in candidates:
+        try:
+            for i in range(min(await loc.count(), 3)):
+                label = norm(await loc.nth(i).inner_text(timeout=5000))
+                if SPEND_RE.search(label):
+                    continue
+                await human_pause(1, 3)
+                await tap(loc.nth(i), timeout=10000)
+                await farm.wait_for_timeout(5000)
+                await shot(farm, "prizeland")
+                return None  # the task list reload tells whether it counted
+        except PlaywrightError:
+            continue
+    await shot(farm, "prizeland")
+    if PICK_PRIZE_RE.search(text):
+        return ("Prize Land vraagt eerst een prijs te kiezen. Doe dat één keer zelf in de loginbrowser; "
+                "daarna geeft de container elke dag water")
+    return "Waterknop niet gevonden in Prize Land (zie screenshot 'prizeland')"
+
+
+async def do_shortcut(page, m):
+    """Open the coins page the way the app's home-screen shortcut does."""
+    await goto(page, shortcut_url(m))
+    end = time.monotonic() + random.uniform(10, 16)
+    while time.monotonic() < end:
+        try:
+            await page.mouse.wheel(0, random.randint(200, 500))
+        except PlaywrightError:
+            pass
+        await page.wait_for_timeout(random.randint(2000, 3500))
+
+
 async def close_extra_pages(ctx, keep):
     for p in list(ctx.pages):
         if p is not keep:
@@ -549,6 +640,7 @@ async def do_tasks(ctx, page, probe):
     reasons, new, log = {}, [], []
     deadline = time.monotonic() + config.TASK_BUDGET_MINUTES * 60
     tasks = []
+    latest = {}  # every task seen this run: a finished task can vanish from the list
     while True:
         tasks = await load_task_list(page, probe)
         if tasks is None:
@@ -556,6 +648,7 @@ async def do_tasks(ctx, page, probe):
             tasks = []
             break
         for m in tasks:
+            latest[task_id(m)] = m
             if task_id(m) not in seen:
                 seen[task_id(m)] = task_title(m)
                 if not first_run:
@@ -579,11 +672,16 @@ async def do_tasks(ctx, page, probe):
         n = len(probe.completes)
         why = None
         try:
-            await tap_task(page, m)
-            if kind == "quiz":
-                why = await do_quiz(ctx, page)
+            if kind == "shortcut":
+                await do_shortcut(page, m)
             else:
-                await browse(ctx, page, m)
+                await tap_task(page, m)
+                if kind == "quiz":
+                    why = await do_quiz(ctx, page)
+                elif kind == "water":
+                    why = await do_water(ctx, page, log)
+                else:
+                    await browse(ctx, page, m)
         except PlaywrightError as e:
             why = f"Kon de taak niet vinden of aantikken ({type(e).__name__})"
         got = probe.completes[n:]
@@ -594,15 +692,29 @@ async def do_tasks(ctx, page, probe):
         await human_pause(2, 6)
     with open(config.SEEN_FILE, "w") as f:
         json.dump(seen, f, ensure_ascii=False)
+    return {"items": task_items(latest, tasks, probe.completes, reasons),
+            "earned": sum(c["coins"] for c in probe.completes if c["ok"]), "new": new, "log": log}
+
+
+def task_items(latest, final, completes, reasons):
+    """The task overview: the final list, plus tasks finished this run that then left the list."""
+    in_final = {task_id(m) for m in final}
+    credited = collections.Counter(c["task"] for c in completes if c["ok"] and c.get("task"))
     items = []
-    for m in tasks:
+    for tid, m in latest.items():
         kind, skip = task_kind(m)
-        state = "done" if task_done(m) else "failed" if kind else "skipped"
-        items.append({"id": task_id(m), "title": task_title(m), "coins": task_coins(m),
-                      "progress": f"{m.get('timesJoined') or 0}/{m.get('timesLimit') or 1}", "state": state,
-                      "reason": skip if state == "skipped" else reasons.get(task_id(m)) if state == "failed" else None})
-    return {"items": items, "earned": sum(c["coins"] for c in probe.completes if c["ok"]),
-            "new": new, "log": log}
+        joined, limit = m.get("timesJoined") or 0, m.get("timesLimit") or 1
+        if tid in in_final:
+            done = task_done(m)
+        elif credited[tid]:  # credited this run, then it left the list: finished
+            joined, done = limit, True
+        else:
+            continue  # vanished without a credit from this run: not ours to report
+        state = "done" if done else "failed" if kind else "skipped"
+        items.append({"id": tid, "title": task_title(m), "coins": task_coins(m),
+                      "progress": f"{joined}/{limit}", "state": state,
+                      "reason": skip if state == "skipped" else reasons.get(tid) if state == "failed" else None})
+    return items
 
 
 # ---------------------------------------------------------------- PC check-in

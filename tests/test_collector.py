@@ -50,6 +50,78 @@ def test_task_kind(m, kind):
     assert collector.task_kind(m)[0] == kind
 
 
+# Real materials from a 2026-11-16 task list (shortened).
+FARM = "https://m.aliexpress.com/p/aefarm/index.html?_immersiveMode=true&from=d11task&adc_manifest=aefarm_index"
+SHORTCUT = "https://m.aliexpress.com/p/coin-index/index.html?_immersiveMode=true&from=shortcut&user_growth_type=shortcut"
+WATER = task(taskId=3324001, mainTitle="Water to win a US $0.10 prize", type=30, materialUrl=FARM,
+             secondTitle="Water your tree in Prize Land now!",
+             behaviorConfig=json.dumps({"taskTagId": "watering2.0", "url": FARM}))
+SHORTCUT_TASK = task(taskId=3298003, mainTitle="Visit the page via coins shortcut ", type=29, materialUrl=None,
+                     behaviorConfig=json.dumps({"shortcutUrl": SHORTCUT, "shortcutId": "coinsPromotion"}),
+                     shortcutMaterial=json.dumps({"shortcutUrl": SHORTCUT}))
+SURPRISE = task(taskId=3302001, mainTitle="Browse surprise items", type=26, materialUrl=None,
+                behaviorConfig=json.dumps({"url": "https://m.aliexpress.com/p/coin-index/adclick.html?adpost=true"}))
+
+
+@pytest.mark.parametrize("m, kind", [
+    (WATER, "water"),
+    (SHORTCUT_TASK, "shortcut"),
+    (task(type=29, materialUrl=None, behaviorConfig=json.dumps({"shortcutUrl": "https://evil.example/x"})), None),
+    (SURPRISE, None),
+    (task(mainTitle="Share coins with friends", type=22, materialUrl=None), None),
+    (task(mainTitle="Add & start using our widget", type=38, materialUrl=None), None),
+    (task(mainTitle="Turn on notifications", type=43, materialUrl=None), None),
+    (task(mainTitle="Items at $0.1 to get", materialUrl="https://m.aliexpress.com/ssr/300000949/farmpc"), None),
+])
+def test_task_kind_new_types(m, kind):
+    assert collector.task_kind(m)[0] == kind
+
+
+def test_water_and_shortcut_can_be_turned_off(monkeypatch):
+    monkeypatch.setattr(collector.config, "DO_WATER", False)
+    monkeypatch.setattr(collector.config, "DO_SHORTCUT", False)
+    assert collector.task_kind(WATER) == (None, "PRIZE_LAND_WATER staat uit")
+    assert collector.task_kind(SHORTCUT_TASK) == (None, "SHORTCUT_TASK staat uit")
+
+
+def test_shortcut_url_falls_back_to_shortcut_material():
+    m = dict(SHORTCUT_TASK, behaviorConfig="{}")
+    assert collector.shortcut_url(m) == SHORTCUT
+
+
+@pytest.mark.parametrize("label, water", [
+    ("Water", True), ("Water now", True), ("Tap to water", True),
+    ("Watermelon phone case", False), ("Buy for $0.10", False),
+])
+def test_water_button_regex(label, water):
+    assert bool(collector.WATER_RE.match(label)) == water
+
+
+def test_task_items_keep_tasks_that_left_the_list():
+    super_d = task(taskId=3320004, mainTitle="View Super discounts", timesJoined=0, timesLimit=1)
+    checkin = task(taskId=3296002, mainTitle="Daily check-in", type=15, timesJoined=0, timesLimit=1)
+    gone = task(taskId=999, mainTitle="Old task", timesJoined=0, timesLimit=1)
+    venue = task(taskId=3336005, mainTitle="View the venue", timesJoined=1, timesLimit=1)
+    latest = {collector.task_id(m): m for m in (super_d, checkin, gone, venue, SURPRISE)}
+    completes = [{"ok": True, "coins": 5, "task": "3320004"}, {"ok": True, "coins": 1, "task": "3296002"},
+                 {"ok": False, "coins": 0, "task": "999"}]
+    items = {i["id"]: i for i in collector.task_items(latest, [venue, SURPRISE], completes, {})}
+    assert items["3320004"]["state"] == "done" and items["3320004"]["progress"] == "1/1"
+    assert items["3296002"]["state"] == "done"
+    assert "999" not in items
+    assert items["3336005"]["state"] == "done"
+    assert items["3302001"]["state"] == "skipped"
+
+
+def test_probe_reads_task_id_of_a_completion():
+    p = collector.Probe()
+    issue = json.dumps({"extraData": {"bizExtend": json.dumps({"behaviorType": 0, "taskId": 3304001})}})
+    feed(p, "mtop.aliexpress.interactive.task.process.complete",
+         {"ret": ["SUCCESS::ok"], "data": {"result": {"completeSuccess": True, "interestIssueResultMap": {
+             "947": {"interestNum": 5, "successIssueResult": issue}}}}})
+    assert p.completes[-1]["task"] == "3304001" and p.completes[-1]["coins"] == 5
+
+
 def test_task_done_and_coins():
     assert collector.task_done({"instanceStatus": 2})
     assert collector.task_done({"timesJoined": 3, "timesLimit": 3})
@@ -84,7 +156,7 @@ def test_probe_sign_complete_balance_and_session():
          {"ret": ["SUCCESS::ok"], "data": {"result": [{"materials": []}]}})
     feed(p, "mtop.aliexpress.coin.boost.home.query", {"ret": ["SUCCESS::ok"], "data": {"userCoinsNum": "130"}})
     assert [s["ok"] for s in p.signs] == [True, False]
-    assert p.completes == [{"ok": True, "coins": 5, "msg": "SUCCESS::ok"}]
+    assert p.completes == [{"ok": True, "coins": 5, "task": None, "msg": "SUCCESS::ok"}]
     assert p.tasks == [{"materials": []}]
     assert (p.balance_first, p.balance) == (120, 130)
     assert not p.session_expired

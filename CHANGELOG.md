@@ -4,6 +4,19 @@ Alle wijzigingen aan AliExpress Coins staan hier, nieuwste bovenaan.
 Versienummers volgen [semver](https://semver.org/lang/nl/): `MAJOR.MINOR.PATCH`.
 Het versienummer staat op één plek: `app/version.py`.
 
+## [0.1.2] - 2026-11-16
+
+### Toegevoegd
+- **"Water to win" (Prize Land)**: de container opent Prize Land vanuit de takenlijst en tikt één keer op de knop "Water". Hij tikt nooit op iets met een prijs, "buy", "order" of "pay", en kiest nooit zelf een prijs. Vraagt Prize Land eerst om een prijs te kiezen, dan meldt het paneel dat je dat één keer zelf moet doen. Er komt een screenshot `prizeland` in het paneel. Uitzetten: `PRIZE_LAND_WATER=false`.
+- **"Visit the page via coins shortcut"**: de container opent de link die de snelkoppeling van de app opent (staat in de takenlijst). Uitzetten: `SHORTCUT_TASK=false`.
+- Duidelijkere redenen in het paneel voor "Share coins with friends" (telt pas als vrienden je link openen) en voor widget en meldingen (eenmalig, op je telefoon).
+
+### Opgelost
+- **Takenoverzicht miste taken.** Een taak die klaar is, verdwijnt soms uit de lijst van AliExpress (Super discounts, Search, Browse more items, de +1-check-in). Het paneel toonde daardoor "4 klaar" terwijl er 8 waren meegeteld. Taken die tijdens de run zijn meegeteld blijven nu in het overzicht staan.
+
+### Bekend
+- Water geven en de snelkoppeling zijn nog niet getest met een ingelogd account. Of AliExpress ze meetelt, zie je in het paneel ("Klaar" of "Niet gelukt") en in `api/last_run.json`.
+
 ## [0.1.1] - 2026-11-16
 
 Na de eerste run met een ingelogd account.

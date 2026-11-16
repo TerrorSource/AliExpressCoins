@@ -154,7 +154,7 @@ async function refresh() {
 
   if (r.finished !== lastFinished) {
     lastFinished = r.finished;
-    $("shots").innerHTML = ["mobile", "tasks", "pc"].map(n => `<img class="shot" alt="${n}" src="screenshot/${n}.png?t=${Date.now()}" onerror="this.remove()">`).join("");
+    $("shots").innerHTML = ["mobile", "tasks", "pc", "prizeland"].map(n => `<img class="shot" alt="${n}" src="screenshot/${n}.png?t=${Date.now()}" onerror="this.remove()">`).join("");
   }
 }
 

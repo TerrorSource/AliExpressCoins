@@ -42,6 +42,10 @@ DO_MOBILE_CHECKIN = env_bool("MOBILE_CHECKIN", True)
 DO_PC_CHECKIN = env_bool("PC_CHECKIN", True)
 DO_TASKS = env_bool("TASKS", True)
 DO_QUIZ = env_bool("QUIZ", True)
+# "Water to win" (Prize Land): give the tree its daily water. Never buys or picks a prize.
+DO_WATER = env_bool("PRIZE_LAND_WATER", True)
+# "Visit the page via coins shortcut": open the link the app's home-screen shortcut opens.
+DO_SHORTCUT = env_bool("SHORTCUT_TASK", True)
 TASK_BUDGET_MINUTES = env_int("TASK_BUDGET_MINUTES", 30)
 # Extra task types (numbers from the task list) to treat as "browse a page" tasks.
 EXTRA_TASK_TYPES = {int(t) for t in re.findall(r"\d+", env("EXTRA_TASK_TYPES", ""))}

@@ -413,7 +413,7 @@ async def api_run(request):
 async def screenshot(request):
     name = request.match_info["name"]
     path = f"{config.RUNS}/{name}.png"
-    if name not in ("mobile", "tasks", "pc") or not os.path.exists(path):
+    if name not in ("mobile", "tasks", "pc", "prizeland") or not os.path.exists(path):
         raise web.HTTPNotFound()
     return web.FileResponse(path, headers={"Cache-Control": "no-store"})
 
